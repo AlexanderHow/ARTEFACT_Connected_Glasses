@@ -10,7 +10,14 @@ class DepthsFromSensor with ChangeNotifier{
   }
 
   List<List<int>> get depthMatrix => _depthMatrix;
+  int get totalSize => _depthMatrix.length * _depthMatrix[0].length;
 
+  ///Get la profondeur du index ième pixel dans la matrice
+  int getDepth(int index){
+    return this._depthMatrix[index ~/ this._depthMatrix[0].length][index % this._depthMatrix[0].length];
+  }
+
+  ///Mise a jour de la matrice de profondeur par ligne reçue
   void updateDepthMatrix(int seqIndex, List<int> row){
     if(seqIndex > this._depthMatrix.length - 1){
       for(int i = this._depthMatrix.length - 1; i < seqIndex; ++i){
@@ -26,6 +33,7 @@ class DepthsFromSensor with ChangeNotifier{
     notifyListeners();
   }
 
+  ///Initie la matrice 8x8 de profondeur à 0
   void _init8x8(){
     for(int i = 0; i < 8; ++i){
       this._depthMatrix.add(new List<int>());
