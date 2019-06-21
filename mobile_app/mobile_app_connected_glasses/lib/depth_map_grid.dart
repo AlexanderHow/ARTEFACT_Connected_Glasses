@@ -34,23 +34,41 @@ class DepthMapGrid extends StatelessWidget{
     });
   }
 
-  void _startVibration(PointerEnterEvent details/*, int depth*/){
-    //if (Vibration.hasVibrator() != null) {
-      Vibration.vibrate();
-    //}
+  void _startVibration(PointerEnterEvent details){
+    //Vibration.hasVibrator()
+    Vibration.vibrate();
   }
 
   void _stopVibration(PointerExitEvent details){
     Vibration.cancel();
   }
 
-  //TODO : event vibrate if depth < X + moduler couleur en fonction de depth
-  Widget buildGridTile(int depth){
+  Color getColorDepth(int depth) {
+    if(depth >=0 && depth <= 42){
+      return Colors.red;
+    }else if(depth >= 43 && depth <= 85){
+      return Colors.deepOrangeAccent;
+    }else if(depth >= 86 && depth <= 128){
+      return Colors.yellowAccent;
+    }else if(depth >= 129 && depth <= 171){
+      return Colors.green;
+    }else if(depth >= 172 && depth <= 214){
+      return Colors.lightBlueAccent;
+    }else if(depth >= 215 && depth <= 255){
+      return Colors.indigo;
+    }else{
+      return Colors.black54;
+    }
+  }
+
+  Widget buildGridTile(int depth, int lineSize, int colSize, BuildContext context){
     return Listener(
-        onPointerEnter: _startVibration,
-        onPointerExit: _stopVibration,
+        onPointerEnter: (depth >= 0 && depth <= 85) ? _startVibration : null ,
+        onPointerExit: (depth >= 0 && depth <= 85) ? _stopVibration : null ,
         child: Container(
-          color: Colors.lightBlueAccent,
+          height: (MediaQuery.of(context).size.width  * 0.9) / lineSize,
+          width: (MediaQuery.of(context).size.width  * 0.9) / colSize,
+          color: this.getColorDepth(depth),
         )
     );
   }
@@ -64,7 +82,10 @@ class DepthMapGrid extends StatelessWidget{
         physics: new NeverScrollableScrollPhysics(),
         primary: true,
         children: List.generate(Provider.of<DepthsFromSensor>(context).totalSize, (index){
-          return buildGridTile(Provider.of<DepthsFromSensor>(context).getDepth(index));
+          return buildGridTile(Provider.of<DepthsFromSensor>(context).getDepth(index),
+              Provider.of<DepthsFromSensor>(context).depthMatrix[0].length,
+              Provider.of<DepthsFromSensor>(context).depthMatrix.length,
+              context);
         }),
       )
     );

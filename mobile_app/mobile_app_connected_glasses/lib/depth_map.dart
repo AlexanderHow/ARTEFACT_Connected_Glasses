@@ -53,7 +53,7 @@ class DepthMap extends StatelessWidget {
             )
           ],
           ),
-          body: DepthMapGrid(snapshot.data[0].characteristics[0]), //get the only service which have one characteristic
+          body: Center(child: DepthMapGrid(snapshot.data[0].characteristics[0])), //get the only service which have one characteristic
         );
       }
     );
