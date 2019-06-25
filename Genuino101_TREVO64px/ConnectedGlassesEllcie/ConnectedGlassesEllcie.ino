@@ -9,7 +9,6 @@ int depth_array[64] = {0};
 bool hasDepthMapToSend = false;
 
 void parse_depth_array(){
-  //TODO : check trame[0] = 0x11 => hi +lo blabla remplir depth_array; then readyToParse = false + hasToSend = true
   int c;
   int hi;
   int byteRead = 0;
@@ -38,11 +37,23 @@ void parse_depth_array(){
 }
 
 void parse_depth_array_mock_up(){
-  //TODO : remplissage random
+  for(int i = 0; i < 64; ++i){
+    depth_array[i] = random(0,255);  
+  }
 }
 
 void send_depth_array(){
-  //TODO : 8 send BLE
+  char toSend[20] = {0};
+  toSend[0] = 0x11;
+  toSend[2] = 8;
+  for(int j = 0; j < 8; ++j){
+    toSend[1] = (char)j;
+    for(int k = 0; k < 8; ++k){
+      toSend[k+3] = (char)depth_array[8*j+k];  
+    }
+    trame.setValue(toSend, 20);
+    delay(100);
+  }
 }
 
 void setup() {
