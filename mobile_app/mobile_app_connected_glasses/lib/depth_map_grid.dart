@@ -1,9 +1,8 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue/flutter_blue.dart';
+import 'grid_display.dart';
 import 'model/depths_from_sensor.dart';
 import 'package:provider/provider.dart';
-import 'package:vibration/vibration.dart';
 
 class DepthMapGrid extends StatelessWidget{
   static const int _TRAME_SIZE = 20;
@@ -13,7 +12,9 @@ class DepthMapGrid extends StatelessWidget{
   DepthsFromSensor _depthsFromSensor = new DepthsFromSensor();
 
   DepthMapGrid(this._characteristic){
-    this.setListener();
+    if(this._characteristic != null){
+      this.setListener();
+    }
   }
 
   void setListener() async {
@@ -34,60 +35,11 @@ class DepthMapGrid extends StatelessWidget{
     });
   }
 
-  void _startVibration(PointerEnterEvent details){
-    //Vibration.hasVibrator()
-    Vibration.vibrate();
-  }
-
-  void _stopVibration(PointerExitEvent details){
-    Vibration.cancel();
-  }
-
-  Color getColorDepth(int depth) {
-    if(depth >=0 && depth <= 42){
-      return Colors.red;
-    }else if(depth >= 43 && depth <= 85){
-      return Colors.deepOrangeAccent;
-    }else if(depth >= 86 && depth <= 128){
-      return Colors.yellowAccent;
-    }else if(depth >= 129 && depth <= 171){
-      return Colors.green;
-    }else if(depth >= 172 && depth <= 214){
-      return Colors.lightBlueAccent;
-    }else if(depth >= 215 && depth <= 255){
-      return Colors.indigo;
-    }else{
-      return Colors.black54;
-    }
-  }
-
-  Widget buildGridTile(int depth, int lineSize, int colSize, BuildContext context){
-    return Listener(
-        onPointerEnter: (depth >= 0 && depth <= 85) ? _startVibration : null ,
-        onPointerExit: (depth >= 0 && depth <= 85) ? _stopVibration : null ,
-        child: Container(
-          height: (MediaQuery.of(context).size.width  * 0.9) / lineSize,
-          width: (MediaQuery.of(context).size.width  * 0.9) / colSize,
-          color: this.getColorDepth(depth),
-        )
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<DepthsFromSensor>.value(
       notifier: this._depthsFromSensor,
-      child: new GridView.count(
-        crossAxisCount: Provider.of<DepthsFromSensor>(context).depthMatrix.length,
-        physics: new NeverScrollableScrollPhysics(),
-        primary: true,
-        children: List.generate(Provider.of<DepthsFromSensor>(context).totalSize, (index){
-          return buildGridTile(Provider.of<DepthsFromSensor>(context).getDepth(index),
-              Provider.of<DepthsFromSensor>(context).depthMatrix[0].length,
-              Provider.of<DepthsFromSensor>(context).depthMatrix.length,
-              context);
-        }),
-      )
+      child: new GridDisplay()
     );
   }
 }
