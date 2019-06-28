@@ -9,7 +9,7 @@ class GridDisplay extends StatelessWidget{
 
   GridDisplay();
 
-  void _startVibration(PointerEnterEvent details){
+  void _startVibration(){
     //Vibration.hasVibrator()
     print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
     Vibration.vibrate();
@@ -38,9 +38,10 @@ class GridDisplay extends StatelessWidget{
   }
 
   Widget buildGridTile(int depth, int lineSize, int colSize, BuildContext context){
-    return Listener(
-        onPointerEnter: (depth >= 0 && depth <= 85) ? _startVibration : null ,
-        onPointerExit: (depth >= 0 && depth <= 85) ? _stopVibration : null ,
+    return GestureDetector(
+        onTap: (depth >= 0 && depth <= 85) ? _startVibration : null ,
+        onLongPress: (depth >= 0 && depth <= 85) ? _startVibration : null ,
+
         child: Container(
           height: (MediaQuery.of(context).size.width  * 0.9) / lineSize,
           width: (MediaQuery.of(context).size.width  * 0.9) / colSize,

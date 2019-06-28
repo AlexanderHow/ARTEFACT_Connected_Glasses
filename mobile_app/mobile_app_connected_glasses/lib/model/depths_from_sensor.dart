@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 /// Parse les trames input provenant du capteur TeraRanger EVO 64px en une matrice représentant la carte de profondeur
@@ -38,8 +40,9 @@ class DepthsFromSensor with ChangeNotifier{
     for(int i = 0; i < 8; ++i){
       this._depthMatrix.add(new List<int>());
       for(int j = 0; j < 8; ++j){
-        this._depthMatrix[i].add(0);
+        this._depthMatrix[i].add(255);
       }
     }
+    this._depthMatrix[0][0]=0;
   }
 }
