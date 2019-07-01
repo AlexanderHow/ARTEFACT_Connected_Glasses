@@ -21,6 +21,7 @@ class DepthsFromSensor with ChangeNotifier{
 
   ///Mise a jour de la matrice de profondeur par ligne reçue
   void updateDepthMatrix(int seqIndex, List<int> row){
+    print("UPDATING "+seqIndex.toString());
     if(seqIndex > this._depthMatrix.length - 1){
       for(int i = this._depthMatrix.length - 1; i < seqIndex; ++i){
         this._depthMatrix.add(new List<int>());

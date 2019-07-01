@@ -41,6 +41,7 @@ void parse_depth_array_mock_up(){
     depth_array[i] = random(0,255);  
   }
   hasDepthMapToSend = true;
+  Serial.println("GENERATED");
 }
 
 void send_depth_array(){
@@ -56,6 +57,7 @@ void send_depth_array(){
     delay(100);
   }
   hasDepthMapToSend = false;
+  Serial.println("SENT");
 }
 
 void setup() {
