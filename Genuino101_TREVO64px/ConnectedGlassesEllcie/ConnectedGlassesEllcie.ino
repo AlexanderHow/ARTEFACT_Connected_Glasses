@@ -2,51 +2,41 @@
 #include <math.h>
 
 BLEPeripheral blePeripheral;  // BLE Peripheral Device
-BLEService glassesService("5017f584-c96e-46c7-b337-b90b60a0147e");
-BLECharacteristic trame("5017f584-c96e-46c7-b337-b90b60a0147e", BLERead | BLENotify, 20);
+BLEService glassesService("b60ba360-5c16-4ddb-bdb2-d134fa42bfbc");
+BLECharacteristic trame("b60ba360-5c16-4ddb-bdb2-d134fa42bfbc", BLERead | BLENotify, 20);
 
 int depth_array[64] = {0};
+uint8_t frame[137] = {0}; //1 byte header + 64*2 bytes of data + 8 bytes of CRC32
+int indexFrame = 0;
+int indexCRC = 0;
 bool hasDepthMapToSend = false;
+bool paddingEnded = false;
 
-void parse_depth_array(){
-  int c;
-  int hi;
-  int byteRead = 0;
-  int indexDepth = 0;
-  bool goodIdTrame = false;
-  while(Serial1.available() && (c = (int)Serial1.read()) != 0x0A){
-    if(byteRead == 0){
-      goodIdTrame = (c == 0x11) ? true : false;
-    }else if(goodIdTrame == true && byteRead < 129){
-      if(byteRead%2 == 1){
-        hi = c;
-      }else{
-        int distance = ((hi << 7) | (c & 0x7F)) & 0x0FFF;
-        if(distance > 0x1388){ //0x3FFF means the object is too far for the sensor
-          distance = 0x1388;
-        }
-        depth_array[indexDepth] = map(distance, 0, 5000, 0, 255);
-        indexDepth ++;
-      }
-    }else{
-      //rest of the trame, last 8 bytes are the CRC32 checksum or wrong id
+void parseEvo(){
+  uint8_t header;
+  uint16_t distance;
+  header = frame[0];
+  if(header == 17){
+    for(int i = 1; i < 65; ++i){
+      //Serial.print("frame ");Serial.print(frame[2*i-1]);Serial.print(" ");Serial.print(frame[2*i]); <= show that we retrieve incoherent data from sensor
+      distance = (frame[2*i-1] & 0x7F) << 7;
+      distance = distance | (frame[2*i] & 0x7F);
+      // ou distance = (frame[2*i-1]<<8) + frame[2*i];
+      distance = (distance > 5000) ? 5000 : distance;
+      distance = map(distance, 0, 5000, 0, 255);
+      depth_array[i-1] = distance;
     }
-    byteRead++;
-  }
-  hasDepthMapToSend = true;
-}
-
-void parse_depth_array_mock_up(){
-  for(int i = 0; i < 64; ++i){
-    depth_array[i] = random(0,255);  
-  }
-  hasDepthMapToSend = true;
-  Serial.println("GENERATED");
+    //crc32 only on the 4 lower bits of each
+    /*for(int j = 129 ; j < 137; ++j){
+      uint8_t crc = frame[j] (& 0x0F);
+    }*/
+    hasDepthMapToSend = true;
+   }  
 }
 
 void send_depth_array(){
   unsigned char toSend[20] = {0};
-  toSend[0] = 0x11;
+  toSend[0] = 17; //0x11
   toSend[2] = 8;
   for(int j = 0; j < 8; ++j){
     toSend[1] = (char)j;
@@ -54,41 +44,100 @@ void send_depth_array(){
       toSend[k+3] = (char)depth_array[8*j+k];  
     }
     trame.setValue(toSend, 20);
-    delay(100);
+    delay(80);
   }
   hasDepthMapToSend = false;
-  Serial.println("SENT");
 }
 
 void setup() {
-  Serial.begin(9600);
-  delay(100);
-  
-  ///TERA EVO 64px UART
-  //Serial1.begin(115200);
-  //Serial1.write(0x0011024C); //Distance mode
-  delay(100);
-  
-  ///BLE
+  /*BLE*/
   blePeripheral.setLocalName("ARTEFACT");
   blePeripheral.setAdvertisedServiceUuid(glassesService.uuid());
   blePeripheral.addAttribute(glassesService);
   blePeripheral.addAttribute(trame);
-  blePeripheral.begin();
-  delay(100);  
+  blePeripheral.begin(); 
+  delay(100);
+  
+  Serial.begin(115200);
+  delay(100);
+  
+  /*TERA EVO 64px UART*/
+  Serial1.begin(115200);
+  delay(100);
+  Serial1.write("\x00\x52\x02\x01\xDF"); //activate VCP
+  delay(100);
+  Serial1.flush();
+  Serial1.write("\x00\x11\x02\x4C"); //distance mode
+  delay(100);
+  Serial1.flush();
+  Serial1.write("\x00\x21\x02\xB5"); //fast mode
+  delay(100);
+  Serial1.flush();
 }
 
 void loop() {
   BLECentral central = blePeripheral.central();
+  uint8_t recv;
   if (central) {
     while (central.connected()) {
-      if(hasDepthMapToSend == true){
-         send_depth_array();
+      if(indexFrame == 129 && indexCRC == 8){
+        parseEvo();
+        if(hasDepthMapToSend == true){
+           send_depth_array();
+        }  
+        indexFrame = 0; 
+        indexCRC = 0;
+        paddingEnded = false; 
       }else{
-         parse_depth_array_mock_up(); //TO CHANGE WHEN WE HAVE THE ACTUAL SENSOR
+        while(Serial1.available()>0){
+          recv = Serial1.read();
+          if(indexFrame == 0){ //header
+            if(recv == 17){
+              frame[indexFrame] = recv;
+              indexFrame++;
+            }
+          }
+          else if(indexFrame > 0 && indexFrame < 129){ //distance data
+            frame[indexFrame] = recv;
+            indexFrame++;
+          }
+          else{ //padding and crc32
+            if(paddingEnded == true){
+              if(indexCRC < 8){
+                frame[indexFrame + indexCRC] = recv;
+                indexCRC++;
+              }else{
+                break;
+              }
+            }else{
+              if(recv != 128){ //0x80 = padding
+                frame[indexFrame + indexCRC] = recv;
+                indexCRC++;
+                paddingEnded = true;
+              }
+            }
+          }
+        }
       }
-      delay(500);
     }
+    indexFrame = 0; 
+    indexCRC = 0;
+    paddingEnded = false;
+    Serial1.flush();
+  }else{
+    indexFrame = 0; 
+    indexCRC = 0;
+    paddingEnded = false;
+    Serial1.flush();  
   }
-
 }
+//DEBUG
+/*void printDepth(){
+  for(int i = 0; i < 8; ++i){
+    for(int j = 0; j < 8; ++j){
+      Serial.print(depth_array[i*8+j]);Serial.print(" ");
+    }
+    Serial.println();
+  }
+  Serial.println("_______________"); 
+}*/
