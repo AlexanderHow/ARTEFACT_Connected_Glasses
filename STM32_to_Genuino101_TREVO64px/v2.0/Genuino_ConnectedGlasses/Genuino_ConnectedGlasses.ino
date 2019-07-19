@@ -53,10 +53,11 @@ void setup() {
   delay(80);
 
   //DEBUG
-  Serial.begin(115200);
-  delay(80);
+  /*Serial.begin(115200);
+  delay(80);*/
 
   //Serial(0,1) communication with module with the sensor, each message begin with 0x00 and continue by sending all the pixels of the depth map
+  //Would need to be at 3MBps but impossible on this target
   Serial1.begin(115200);
   delay(80);
   while(!Serial1){;}
