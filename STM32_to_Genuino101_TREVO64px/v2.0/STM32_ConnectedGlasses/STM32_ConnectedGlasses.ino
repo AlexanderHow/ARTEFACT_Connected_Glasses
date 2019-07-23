@@ -1,87 +1,87 @@
+#define NUMLINE 8
+#define NUMCOL 8
+#define FRAMETOSKIP 10
+
+#define SSI_FRAME_MAX_PAYLOAD_SIZE 255
+#define SSI_FRAME_HEADER_SIZE 3
+#define SSI_FRAME_FOOTER_SIZE 2
+#define SSI_FRAME_OVERHEAD_SIZE (SSI_FRAME_HEADER_SIZE + SSI_FRAME_FOOTER_SIZE)
+#define SSI_FRAME_MAX_LENGTH (SSI_FRAME_MAX_PAYLOAD_SIZE + SSI_FRAME_OVERHEAD_SIZE)
+
+#define SSI_FRAME_SOF           0xFE
+#define SSI_FRAME_SOF_INDEX     0
+#define SSI_FRAME_LEN_INDEX     1
+#define SSI_FRAME_NOT_LEN_INDEX 2 
+#define SSI_FRAME_ADDR_INDEX    3 
+#define SSI_FRAME_CMD_INDEX     4
+
 HardwareSerial Serial1(PA10, PA9); //rx, tx from sensor
 HardwareSerial Serial4(PA1, PA0); //rx, tx to main board
 
-int NUMLINE = 8;
-int NUMCOL = 8;
-int FRAMETOSKIP = 10;
+enum ssi_commands_defition
+{
+   SSI_WILDCARD = '?',
+   SSI_QUERY = 'q',
+   SSI_QUERY_RSP = 'a',
+   SSI_DISCOVER_SENSORS = 'c',
+   SSI_DISCOVER_REPLY = 'n',
+   SSI_GET_CONFIGURATION_DATA = 'g',
+   SSI_CONFIGURATION_DATA_RSP = 'x',
+   SSI_SENSOR_DATA_RSP = 'd',
+   SSI_SENSOR_MANY_DATA_RSP = 'm',
+   SSI_CREATE_SENSOR_OBSERVER = 'o',
+   SSI_OBSERVER_CREATED = 'y',
+   SSI_KILL_SENSOR_OSERVER = 'k'
+}
 
-int matrix[64] = {0};
-int indexDepth = 0;
-int frameSkipped = 0;
-byte crc32[8] = {0};
-int indexFrame = 0;
-int indexCRC = 0;
-byte highRecvByte = 0;
-byte lowRecvByte = 0;
-bool paddingEnded = false;
-bool setupDone = false;
+uint8_t depthMatrix[64] = {0};
+byte frameSensor[137] = {0}; //1 byte header + 64*2 bytes of data + 8 bytes of CRC32
+int indexFrameSensor = 0;
+int totalLenFrame = 0;
 
-void sendInitialData(){
-  if(Serial4){ 
-    Serial4.write(255);
-    delay(5);
-    Serial4.write(NUMLINE);
-    delay(5);
-    Serial4.write(NUMCOL);
-    delay(5);
-    setupDone = true;
+byte frameSSI[SSI_FRAME_MAX_LENGTH] = {0}; //0xFE Len ~Len Addr Cmd Data Crc
+int indexFrameSSI = 0;
+
+bool observerCreated = false;
+
+bool checkCrcSSI(){ 
+  //TODO
+  return true;
+}
+
+void resetFrameSSI(){ 
+  for(int i = 0, i < SSI_FRAME_MAX_LENGTH; ++i){ 
+    frameSSI[i] = 0;
   }
 }
 
-int getDistance(){ 
-  int distance = ((highRecvByte & 0x1F) << 7) | (lowRecvByte & 0x7F);
-  distance = (distance > 5000) ? 5000 : distance;
-  distance = map(distance, 0, 5000, 1, 254);
-  return distance;
-}
+void parseSSI(){ 
+  if(frameSSI[SSI_FRAME_SOF_INDEX] == 0xFE &&
+     frameSSI[SSI_FRAME_LEN_INDEX] == (~frameSSI[SSI_FRAME_NOT_LEN_INDEX]) &&
+     checkCrcSSI() == true){ 
 
-void headerAndDepthParser(byte recv){ 
-  if( recv == 17){ //start of the depth data stream
-    indexFrame = 1;
-    if(frameSkipped == 0){
-      Serial4.write(0); //mark skip
-      delay(5);         //mark skip
-    }
-  }
-
-  if(indexFrame > 0){ //stream of data has strated, we got the 0x11 header
-    if((indexFrame%2) == 1){ //the high byte
-      highRecvByte = recv;
-    }else{  //the low byte
-      lowRecvByte = recv;
-      int d = getDistance();
-      if(frameSkipped == 0){ 
-        matrix[indexDepth]=d; 
-        indexDepth++;
-        Serial4.write(d);//mark skip
-        delay(5);        //mark skip
+      switch(frameSSI[SSI_FRAME_CMD_INDEX]){ 
+        case SSI_QUERY:
+          sendSSI(SSI_QUERY_RSP);
+          break;
+        case SSI_DISCOVER_SENSORS:
+          sendSSI(SSI_DISCOVER_REPLY);
+          break;
+        case SSI_GET_CONFIGURATION_DATA:
+          sendSSI(SSI_CONFIGURATION_DATA_RSP);
+          break;
+        case SSI_CREATE_SENSOR_OBSERVER:
+          observerCreated = true;
+          sendSSI(SSI_OBSERVER_CREATED);
+          break;
+        case SSI_KILL_SENSOR_OSERVER:
+          observerCreated = false;
+          break;
+        default:
+          break;
       }
-    }
-    indexFrame++;
-  }
-}
 
-void paddingAndCrcParser(byte recv){ 
-  if(paddingEnded == true){ //crc
-    crc32[indexCRC] = recv;
-    indexCRC++;
-    if(indexCRC > 7){ //end of crc32 and reset of the state of the stream reading process
-      indexCRC = 0;
-      indexFrame = 0;
-      paddingEnded = false;
-      //mark incr frame skipped
-      frameSkipped++;
-      frameSkipped=frameSkipped%FRAMETOSKIP;
-      //TODO : check crc, if so replace in headerAndDepthParser "Serila4.write(d);" by "matrix[indexDepth]=d; indexDepth++;" and send all the matrix on Serial4 if the crc is ok
-      indexDepth = 0;
-    }
-  }else{ 
-    //padding = 0x80
-    if(recv != 128){ 
-      paddingEnded = true;
-      crc32[indexCRC] = recv;
-      indexCRC++;
-    }
+      resetFrameSSI();
   }
 }
 
@@ -91,28 +91,14 @@ void setup() {
   while(!Serial1){;}
   Serial1.write("\x00\x11\x02\x4C"); //distance mode
   delay(50);
-  Serial1.write("\x00\x21\x01\xBC"); //close range mode
-  delay(50);
 
   //Serial communication with main board
-  //Set the baud rate of your needs, would need to be 3MBps
+  //Set the baud rate of your needs
   Serial4.begin(115200);
   while(!Serial4){;}
   delay(50);
 }
 
 void loop() {
-  byte recv;
-  if(setupDone == false){ //TRANSMIT INITIAL DATA : size of the depth matrix
-    sendInitialData();
-  }else{ //SENDING THE DEPTH MATRIX TO MAIN BOARD
-    while(Serial1.available()>0){ 
-      recv = byte(Serial1.read());
-      if(indexFrame < 129){ //HEADER + DEPTH DATA
-        headerAndDepthParser(recv);
-      }else{ //PADDING + CRC32
-        paddingAndCrcParser(recv);
-      }
-    }   
-  }
+  
 }
