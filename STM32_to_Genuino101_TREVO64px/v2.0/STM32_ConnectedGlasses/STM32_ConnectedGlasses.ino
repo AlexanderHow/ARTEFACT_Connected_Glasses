@@ -45,15 +45,99 @@ int indexFrameSSI = 0;
 
 bool observerCreated = false;
 
-bool checkCrcSSI(){ 
-  //TODO
-  return true;
-}
 
 void resetFrameSSI(){ 
   for(int i = 0, i < SSI_FRAME_MAX_LENGTH; ++i){ 
     frameSSI[i] = 0;
   }
+}
+
+///////////////////
+// Calcul du CRC //
+///////////////////
+uint16_t ssi_fnCRC16(uint8_t *ptrFrame, uint16_t len)
+{
+    // Shift SOF, len and ~len
+    ptrFrame += SSI_FRAME_HEADER_SIZE;
+
+    uint16_t crc = 0;
+
+    for(int i = 0; i < (len - SSI_FRAME_OVERHEAD_SIZE); i++)
+    {
+        crc ^= *ptrFrame++;
+
+        for(int j = 0; j < 8; j++)
+        {
+            if(crc & 1)
+            {
+                crc = crc >> 1;
+                crc ^= 0xA001;
+            }
+            else
+            {
+                crc = crc >> 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
+///////////////////////////
+// Vérification du CRC   //
+///////////////////////////
+static int ssi_frame_check_crc(const char *frame, uint16_t len)
+{
+    uint8_t payload_size = 0;
+    uint8_t cmd = 0; 
+    uint16_t crc_pos = 0;
+    uint16_t lo = 0; 
+    uint16_t hi = 0; 
+    uint16_t rcv_crc = 0, calc_crc = 0;
+    int ret = -1;
+
+    if (!frame)
+        return -1;
+
+    if (len <= SSI_FRAME_NOT_LEN_INDEX)
+    {   
+        return -1;
+    }
+
+    cmd = frame[SSI_FRAME_CMD_INDEX];
+        
+    if(cmd > 'A' && cmd < 'Z')
+        // No CRC when command is upper case
+        return 0;
+
+    payload_size = frame[SSI_FRAME_LEN_INDEX] - SSI_FRAME_OVERHEAD_SIZE;
+    crc_pos = EH_FRAME_HEADER_SIZE + payload_size;
+
+    if ((crc_pos + 1) >= payload_size)
+    {
+        return -1;
+    }
+    
+    hi = (((uint16_t)frame[crc_pos]) << 8) & 0xFF00;
+    lo = (uint16_t)frame[crc_pos+1] & 0x00FF;
+
+    // Read CRC
+    rcv_crc = (hi | lo);
+    // Is CRC ok ?
+    // Re-Calculate CRC
+    calc_crc = ssi_fnCRC16((uint8_t *)frame, (uint16_t)len);
+
+    if (calc_crc - rcv_crc == 0)
+    {
+        // crc ok
+        ret = 0;
+    }
+    else
+    {
+        LOG_ERR("CRC Error : calculated CRC = 0x%x when expected = 0x%x", calc_crc, rcv_crc);
+    }
+
+    return ret;
 }
 
 ////////////////
@@ -102,10 +186,10 @@ void sendSSI_queryRsp(){
   Serial4.write("\xFE\x0F\xF0\x00\x61\x01\x00\xFF\x00\x00\x00\x00\x00\x51\x70");
 }
 
-// 0x FE 2D D2 00 'n' FFFF "_Tera_evo_64_px_" "depth___" 01 00 000000 0000FF crc16 = 43 bytes
+// 0x FE 2D D2 00 'n' 0050 "_Tera_evo_64_px_" "depth___" 01 00 000000 0000FF crc16 = 43 bytes
 void sendSSI_discoverReply(){ 
-  byte toSend[43] = {0};
-  int sensorId = 0xFFFF;
+  uint8_t toSend[43] = {0};
+  int sensorId = 0x0050;
   uint8_t type = 0x01;
   uint8_t scaler = 0x00;
   uint8_t mini[4] = {0x00, 0x00, 0x00, 0x00};
@@ -118,15 +202,15 @@ void sendSSI_discoverReply(){
   toSend[SSI_FRAME_LEN_INDEX] = lenFrame;
   toSend[SSI_FRAME_NOT_LEN_INDEX] = ~lenFrame;
   toSend[SSI_FRAME_ADDR_INDEX] = 0x00;
-  toSend[SSI_FRAME_CMD_INDEX] = byte('n');
+  toSend[SSI_FRAME_CMD_INDEX] = uint8_t('n');
 
   toSend[5] = (uint8_t)((sensorId & 0xFF00)>>8);
-  toSend[6] = (uint8_t)(sensorId & 0x00FF)
+  toSend[6] = (uint8_t)(sensorId & 0x00FF);
   for(int i = 7; i < 23; ++i){ 
-    toSend[i] = byte(description[i-7]); 
+    toSend[i] = uint8_t(description[i-7]); 
   }
   for(int j = 23; j < 31; ++j){ 
-    toSend[j] = byte(unit[j-23]); 
+    toSend[j] = uint8_t(unit[j-23]); 
   }
   toSend[31] = type;
   toSend[32] = scaler;
@@ -136,7 +220,9 @@ void sendSSI_discoverReply(){
   for(int l = 37; l < 41; ++l){ 
     toSend[l] = maxi[l-37]; 
   }
-  addCRC16(toSend, lenFrame, SSI_FRAME_SOP_INDEX);
+  uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
+  toSend[41] = (uint8_t)((crcFrame >> 8) & 0xFF);
+  toSend[42] = (uint8_t)(crcFrame & 0xFF);
 
   while(Serial4.availableForWrite() < 43){ 
     delay(2);
@@ -152,8 +238,31 @@ void sendSSI_observerCreated(){
   
 }
 
+//0x FE 49 B6 00 'm' 0050 64_data_of_1_byte crc16 = 73 bytes
 void sendSSI_manyData(){ 
-  
+  uint8_t toSend[73] = {0};
+  int sensorId = 0x0050;
+  uint8_t lenFrame = (uint8_t)sizeof(toSend);
+
+  toSend[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
+  toSend[SSI_FRAME_LEN_INDEX] = lenFrame;
+  toSend[SSI_FRAME_NOT_LEN_INDEX] = ~lenFrame;
+  toSend[SSI_FRAME_ADDR_INDEX] = 0x00;
+  toSend[SSI_FRAME_CMD_INDEX] = uint8_t('m');
+  toSend[5] = (uint8_t)((sensorId & 0xFF00)>>8);
+  toSend[6] = (uint8_t)(sensorId & 0x00FF);
+
+  for(int i = 0; i < 64; ++i){ 
+    toSend[i+7] = depthMatrix[i];
+  }
+
+  uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
+  toSend[71] = (uint8_t)((crcFrame >> 8) & 0xFF);
+  toSend[72] = (uint8_t)(crcFrame & 0xFF);
+
+  for(int j = 0; j < 73; ++j){ 
+    Serial4.write(toSend[j]);
+  }
 }
 
 void setup() { 
