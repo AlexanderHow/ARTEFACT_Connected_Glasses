@@ -36,17 +36,20 @@ enum ssi_commands_defition
 }
 
 uint8_t depthMatrix[64] = {0};
-byte frameSensor[137] = {0}; //1 byte header + 64*2 bytes of data + 8 bytes of CRC32
+uint8_t frameSensor[137] = {0}; //1 byte header + 64*2 bytes of data + 8 bytes of CRC32
 int indexFrameSensor = 0;
 int totalLenFrame = 0;
 
-byte frameSSI[SSI_FRAME_MAX_LENGTH] = {0}; //0xFE Len ~Len Addr Cmd Data Crc
+uint8_t frameSSI[SSI_FRAME_MAX_LENGTH] = {0}; //0xFE Len ~Len Addr Cmd Data Crc
 int indexFrameSSI = 0;
+int lenFrameSSI = 0;
 
 bool observerCreated = false;
+bool hasDepthsToSend = false;
 
-
-void resetFrameSSI(){ 
+void resetFrameSSI(){
+  indexFrameSSI = 0;
+  lenFrameSSI = 0;
   for(int i = 0, i < SSI_FRAME_MAX_LENGTH; ++i){ 
     frameSSI[i] = 0;
   }
@@ -91,35 +94,39 @@ static int ssi_frame_check_crc(const char *frame, uint16_t len)
     uint8_t payload_size = 0;
     uint8_t cmd = 0; 
     uint16_t crc_pos = 0;
-    uint16_t lo = 0; 
+    uint16_t lo = 0;
     uint16_t hi = 0; 
     uint16_t rcv_crc = 0, calc_crc = 0;
     int ret = -1;
 
     if (!frame)
+    {
         return -1;
+    }
 
     if (len <= SSI_FRAME_NOT_LEN_INDEX)
-    {   
+    {
         return -1;
     }
 
     cmd = frame[SSI_FRAME_CMD_INDEX];
         
     if(cmd > 'A' && cmd < 'Z')
+    {
         // No CRC when command is upper case
         return 0;
+    }
 
     payload_size = frame[SSI_FRAME_LEN_INDEX] - SSI_FRAME_OVERHEAD_SIZE;
-    crc_pos = EH_FRAME_HEADER_SIZE + payload_size;
+    crc_pos = SSI_FRAME_HEADER_SIZE + payload_size;
 
-    if ((crc_pos + 1) >= payload_size)
+    if ((crc_pos + 1) >= frame[SSI_FRAME_LEN_INDEX])
     {
         return -1;
     }
-    
+
     hi = (((uint16_t)frame[crc_pos]) << 8) & 0xFF00;
-    lo = (uint16_t)frame[crc_pos+1] & 0x00FF;
+    lo = (uint16_t)frame[crc_pos + 1] & 0x00FF;
 
     // Read CRC
     rcv_crc = (hi | lo);
@@ -134,9 +141,8 @@ static int ssi_frame_check_crc(const char *frame, uint16_t len)
     }
     else
     {
-        LOG_ERR("CRC Error : calculated CRC = 0x%x when expected = 0x%x", calc_crc, rcv_crc);
+        //error
     }
-
     return ret;
 }
 
@@ -186,7 +192,7 @@ void sendSSI_queryRsp(){
   Serial4.write("\xFE\x0F\xF0\x00\x61\x01\x00\xFF\x00\x00\x00\x00\x00\x51\x70");
 }
 
-// 0x FE 2D D2 00 'n' 0050 "_Tera_evo_64_px_" "depth___" 01 00 000000 0000FF crc16 = 43 bytes
+// 0x FE 2D D2 00 'n' 0050 "_Tera_evo_64_px_" "depth_1B" 01 00 000000 0000FF crc16 = 43 bytes
 void sendSSI_discoverReply(){ 
   uint8_t toSend[43] = {0};
   int sensorId = 0x0050;
@@ -195,7 +201,7 @@ void sendSSI_discoverReply(){
   uint8_t mini[4] = {0x00, 0x00, 0x00, 0x00};
   uint8_t maxi[4] = {0x00, 0x00, 0x00, 0xFF}; 
   char description[16] = {'_','T','e','r','a','_','e','v','o','_','6','4','_','p','x','_'};
-  char unit = {'d','e','p','t','h','_','_','_'};
+  char unit = {'d','e','p','t','h','_','1','B'};
   uint8_t lenFrame = (uint8_t)sizeof(toSend);
 
   toSend[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
@@ -327,5 +333,61 @@ void setup() {
 }
 
 void loop() {
-  
+  //read ssi cmd
+  uint8_t recvSSI;
+  while(Serial4.available() > 0){ 
+    recvSSI = (uint8_t)Serial4.read();
+    if(recvSSI == 0xFE){ 
+      indexFrameSSI = 0;
+      frameSSI[indexFrameSSI] = recvSSI;
+      indexFrameSSI++;
+    }else{ 
+      if(indexFrameSSI == 1){ 
+        lenFrameSSI = recvSSI;
+        frameSSI[indexFrameSSI] = recvSSI;
+        indexFrameSSI++;
+      }else{ 
+        frameSSI[indexFrameSSI] = recvSSI;
+        indexFrameSSI++;
+        if(indexFrameSSI >= lenFrameSSI){ 
+          parseSSI();
+          break;
+        }
+      }
+    }
+  }
+
+  //read sensor output
+  uint8_t recvSensor;
+  while(Serial1.available() > 0){ 
+    recvSensor = Serial1.read();
+    if(recvSensor == 0x17 && indexFrameSensor < 129){ 
+      indexFrameSensor = 0;
+      totalLenFrame = 0;
+      frameSensor[indexFrameSensor] = recvSensor;
+      indexFrameSensor++;
+      totalLenFrame++;
+    }else{ 
+      
+      if(indexFrameSensor >= 129 && recvSensor == 0x80){ 
+        //skip padding
+        totalLenFrame++;
+      }else{ 
+        frameSensor[indexFrameSensor] = recvSensor;
+        indexFrameSensor++;
+        totalLenFrame++;
+      }
+
+      if(indexFrameSensor >= 137){ 
+        parseSensor();
+        break;
+      }
+    }
+  }
+
+  //send ssi cmd 'm'
+  if(observerCreated == true && hasDepthsToSend == true){ 
+    sendSSI_manyData();
+    hasDepthsToSend = false;
+  }
 }
