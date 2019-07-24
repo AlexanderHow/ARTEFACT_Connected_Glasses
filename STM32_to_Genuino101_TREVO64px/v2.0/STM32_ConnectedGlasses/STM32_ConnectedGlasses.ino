@@ -14,6 +14,7 @@
 #define SSI_FRAME_NOT_LEN_INDEX 2 
 #define SSI_FRAME_ADDR_INDEX    3 
 #define SSI_FRAME_CMD_INDEX     4
+#define SSI_FRAME_SOP_INDEX     5
 
 HardwareSerial Serial1(PA10, PA9); //rx, tx from sensor
 HardwareSerial Serial4(PA1, PA0); //rx, tx to main board
@@ -55,6 +56,10 @@ void resetFrameSSI(){
   }
 }
 
+////////////////
+//PARSER SSI ///
+////////////////
+
 void parseSSI(){ 
   if(frameSSI[SSI_FRAME_SOF_INDEX] == 0xFE &&
      frameSSI[SSI_FRAME_LEN_INDEX] == (~frameSSI[SSI_FRAME_NOT_LEN_INDEX]) &&
@@ -62,7 +67,7 @@ void parseSSI(){
 
       switch(frameSSI[SSI_FRAME_CMD_INDEX]){ 
         case SSI_QUERY:
-          sendSSI(SSI_QUERY_RSP);
+          sendSSI_queryRsp();
           break;
         case SSI_DISCOVER_SENSORS:
           sendSSI(SSI_DISCOVER_REPLY);
@@ -83,6 +88,72 @@ void parseSSI(){
 
       resetFrameSSI();
   }
+}
+
+///////////////////
+//SEND SSI FRAME///
+///////////////////
+
+//reponse constante 0xFE 0x0F 0xF0 0x00 'a' 0x0100 FF00 0000 0000 0x5170
+void sendSSI_queryRsp(){ 
+  while(Serial4.availableForWrite() < 15){ 
+    delay(2);
+  }
+  Serial4.write("\xFE\x0F\xF0\x00\x61\x01\x00\xFF\x00\x00\x00\x00\x00\x51\x70");
+}
+
+// 0x FE 2D D2 00 'n' FFFF "_Tera_evo_64_px_" "depth___" 01 00 000000 0000FF crc16 = 43 bytes
+void sendSSI_discoverReply(){ 
+  byte toSend[43] = {0};
+  int sensorId = 0xFFFF;
+  uint8_t type = 0x01;
+  uint8_t scaler = 0x00;
+  uint8_t mini[4] = {0x00, 0x00, 0x00, 0x00};
+  uint8_t maxi[4] = {0x00, 0x00, 0x00, 0xFF}; 
+  char description[16] = {'_','T','e','r','a','_','e','v','o','_','6','4','_','p','x','_'};
+  char unit = {'d','e','p','t','h','_','_','_'};
+  uint8_t lenFrame = (uint8_t)sizeof(toSend);
+
+  toSend[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
+  toSend[SSI_FRAME_LEN_INDEX] = lenFrame;
+  toSend[SSI_FRAME_NOT_LEN_INDEX] = ~lenFrame;
+  toSend[SSI_FRAME_ADDR_INDEX] = 0x00;
+  toSend[SSI_FRAME_CMD_INDEX] = byte('n');
+
+  toSend[5] = (uint8_t)((sensorId & 0xFF00)>>8);
+  toSend[6] = (uint8_t)(sensorId & 0x00FF)
+  for(int i = 7; i < 23; ++i){ 
+    toSend[i] = byte(description[i-7]); 
+  }
+  for(int j = 23; j < 31; ++j){ 
+    toSend[j] = byte(unit[j-23]); 
+  }
+  toSend[31] = type;
+  toSend[32] = scaler;
+  for(int k = 33; k < 37; ++k){ 
+    toSend[k] = mini[k-33]; 
+  }
+  for(int l = 37; l < 41; ++l){ 
+    toSend[l] = maxi[l-37]; 
+  }
+  addCRC16(toSend, lenFrame, SSI_FRAME_SOP_INDEX);
+
+  while(Serial4.availableForWrite() < 43){ 
+    delay(2);
+  }
+  Serial4.write(toSend, sizeof(toSend));
+}
+
+void sendSSI_configurationRsp(){ 
+  
+}
+
+void sendSSI_observerCreated(){ 
+  
+}
+
+void sendSSI_manyData(){ 
+  
 }
 
 void setup() { 
