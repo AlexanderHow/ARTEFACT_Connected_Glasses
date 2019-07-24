@@ -264,8 +264,25 @@ void sendSSI_configurationRsp(){
   }
 }
 
+//0x FE 08 F7 00 'y' 00 crc16 = 8 bytes 
 void sendSSI_observerCreated(){ 
-  
+  uint8_t toSend[8] = {0};
+  uint8_t lenFrame = (uint8_t)sizeof(toSend);
+
+  toSend[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
+  toSend[SSI_FRAME_LEN_INDEX] = lenFrame;
+  toSend[SSI_FRAME_NOT_LEN_INDEX] = ~lenFrame;
+  toSend[SSI_FRAME_ADDR_INDEX] = 0x00;
+  toSend[SSI_FRAME_CMD_INDEX] = uint8_t('y');
+  toSend[5] = 0x00;
+
+  uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
+  toSend[6] = (uint8_t)((crcFrame >> 8) & 0xFF);
+  toSend[7] = (uint8_t)(crcFrame & 0xFF);
+
+  for(int j = 0; j < 8; ++j){ 
+    Serial4.write(toSend[j]);
+  }
 }
 
 //0x FE 49 B6 00 'm' 0050 64_data_of_1_byte crc16 = 73 bytes
