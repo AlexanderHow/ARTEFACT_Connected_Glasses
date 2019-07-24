@@ -224,14 +224,44 @@ void sendSSI_discoverReply(){
   toSend[41] = (uint8_t)((crcFrame >> 8) & 0xFF);
   toSend[42] = (uint8_t)(crcFrame & 0xFF);
 
-  while(Serial4.availableForWrite() < 43){ 
-    delay(2);
+  for(int m = 0; m < 43; ++m){ 
+    Serial4.write(toSend[m]);
   }
-  Serial4.write(toSend, sizeof(toSend));
 }
 
+//0x FE 11 EE 00 'x' 0050 12 'L' 0008 12 'C' 0008 crc16 = 17 bytes
 void sendSSI_configurationRsp(){ 
-  
+  uint8_t toSend[17] = {0};
+  int sensorId = 0x0050;
+  uint8_t lenFrame = (uint8_t)sizeof(toSend);
+
+  toSend[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
+  toSend[SSI_FRAME_LEN_INDEX] = lenFrame;
+  toSend[SSI_FRAME_NOT_LEN_INDEX] = ~lenFrame;
+  toSend[SSI_FRAME_ADDR_INDEX] = 0x00;
+  toSend[SSI_FRAME_CMD_INDEX] = uint8_t('x');
+  toSend[5] = (uint8_t)((sensorId & 0xFF00)>>8);
+  toSend[6] = (uint8_t)(sensorId & 0x00FF);
+
+  toSend[7] = 0x12;
+  toSend[8] = uint8_t('L');
+  int numberOfLine = NUMLINE;
+  toSend[9] = (uint8_t)((numberOfLine >> 8) & 0xFF);
+  toSend[10] = (uint8_t)(numberOfLine & 0xFF);
+
+  toSend[11] = 0x12;
+  toSend[12] = uint8_t('L');
+  int numberOfColumn = NUMCOL;
+  toSend[13] = (uint8_t)((numberOfColumn >> 8) & 0xFF);
+  toSend[14] = (uint8_t)(numberOfColumn & 0xFF);
+
+  uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
+  toSend[15] = (uint8_t)((crcFrame >> 8) & 0xFF);
+  toSend[16] = (uint8_t)(crcFrame & 0xFF);
+
+  for(int j = 0; j < 17; ++j){ 
+    Serial4.write(toSend[j]);
+  }
 }
 
 void sendSSI_observerCreated(){ 
