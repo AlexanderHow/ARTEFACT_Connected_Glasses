@@ -11,7 +11,6 @@ class GridDisplay extends StatelessWidget{
 
   void _startVibration(){
     //Vibration.hasVibrator()
-    print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
     Vibration.vibrate();
   }
 
