@@ -5,7 +5,7 @@ import 'package:flutter_blue/flutter_blue.dart';
 import 'grid_display.dart';
 import 'model/depths_from_sensor.dart';
 import 'package:provider/provider.dart';
-
+//TODO : secure setState to check if widget is still mounted so we don't call setState after a dispose
 class DepthMapGrid extends StatefulWidget{
   final BluetoothDevice _device;
 
@@ -16,8 +16,8 @@ class DepthMapGrid extends StatefulWidget{
 }
 
 class _DepthMapGridState extends State<DepthMapGrid>{
-  static const int _TRAME_SIZE = 20;
-  static const int _TRAME_ID = 0x11;
+  static const int _TRAME_ID_EVO64 = 0x11;
+  static const int _TRAME_ID_VL53L1 = 0x50;
   BluetoothDevice _device;
 
   DepthsFromSensor _depthsFromSensor = new DepthsFromSensor();
@@ -50,17 +50,50 @@ class _DepthMapGridState extends State<DepthMapGrid>{
                   _notifyingCharacteristic = notifyState;
                 });
                 if(notifyState){
+                  //GESTION DE TRAME BLE ICI
                   _characteristic.value.listen((value) {
-                    if (value.length == _TRAME_SIZE) {
+                    if (value.length > 0) {
                       int idTrame = value[0];
-                      int numSequence = value[1];
-                      int sizeRow = value[2];
-                      if (idTrame == _TRAME_ID) {
-                        List<int> row = new List<int>();
-                        for (int i = 0; i < sizeRow; ++i) {
-                          row.add(value[3 + i]);
-                        }
-                        this._depthsFromSensor.updateDepthMatrix(numSequence, row);
+                      switch(idTrame){
+                        case _TRAME_ID_EVO64:
+                          int numSequence = value[1];
+                          int sizeRow = value[2];
+
+                          List<int> row = new List<int>();
+                          for (int i = 0; i < sizeRow; ++i) {
+                            row.add(value[3 + i]);
+                          }
+
+                          this._depthsFromSensor.updateDepthMatrix(numSequence, row);
+                          break;
+
+                        case _TRAME_ID_VL53L1:
+                          //int sizeRow = value[1]; can sqrt this size but we now in that case it's 16 so a 4*4 matrix
+                          List<List<int>> newMatrix = new List<List<int>>();
+                          newMatrix.add(new List<int>()); //row 0
+                          newMatrix.add(new List<int>()); //row 1
+                          newMatrix.add(new List<int>()); //row 2
+                          newMatrix.add(new List<int>()); //row 3
+                          newMatrix.add(new List<int>()); //row 4
+                          newMatrix.add(new List<int>()); //row 5
+                          newMatrix.add(new List<int>()); //row 6
+                          newMatrix.add(new List<int>()); //row 7
+
+                          //interpoler la matrice 4*4 en 8*8
+                          for( int i = 0; i < 4; ++i){
+                            for( int j = 0; j < 4; ++j){
+                              newMatrix[i*2].add(value[(i*4)+j+2]);
+                              newMatrix[i*2].add(value[(i*4)+j+2]);
+                              newMatrix[(i*2)+1].add(value[(i*4)+j+2]);
+                              newMatrix[(i*2)+1].add(value[(i*4)+j+2]);
+                            }
+                          }
+
+                          this._depthsFromSensor.fullUpdateDepthMatrix(newMatrix);
+                          break;
+
+                        default:
+                          break;
                       }
                     }
                   });

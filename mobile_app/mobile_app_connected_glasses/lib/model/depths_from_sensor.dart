@@ -36,6 +36,12 @@ class DepthsFromSensor with ChangeNotifier{
     notifyListeners();
   }
 
+  ///Mise a jour de la matrice de profondeur
+  void fullUpdateDepthMatrix(List<List<int>> newDepthMatrix){
+    this._depthMatrix = newDepthMatrix;
+    notifyListeners();
+  }
+
   ///Initie la matrice 8x8 de profondeur à 0
   void _init8x8(){
     for(int i = 0; i < 8; ++i){
