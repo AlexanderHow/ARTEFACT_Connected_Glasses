@@ -65,6 +65,7 @@ void parseSSI(){
           SSI_discoverReply(&toSend, lenFrame);
           break;
         case SSI_GET_CONFIGURATION_DATA:
+          //TODO : care about id sensor in the cmd even if only one sensor here ?
           lenFrame = 17;
           SSI_configurationRsp(&toSend, lenFrame);
           break;
