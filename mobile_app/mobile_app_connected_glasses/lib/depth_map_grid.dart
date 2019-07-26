@@ -20,6 +20,8 @@ class _DepthMapGridState extends State<DepthMapGrid>{
   static const int _TRAME_ID_VL53L1 = 0x50;
   static const String _SERVICE_UUID = "838f7fdd-4c42-405f-b8d4-83a698cce2e";
   static const String _CHARACT_SENSOR_STREAM_UUID = "a864bb58-1b21-4b89-8f5a-6947341abbf0";
+  static const String _SERVICE_CONTROL_UUID = "00ff0000-fd7a-4c87-6373-712060e11c1e";
+  static const String _CHARACT_COMMAND_UUID = "00ff0001-fd7a-4c87-6373-712060e11c1e";
 
   BluetoothDevice _device;
 
@@ -31,6 +33,11 @@ class _DepthMapGridState extends State<DepthMapGrid>{
   bool _notifyingCharacteristic = false;
 
   _DepthMapGridState(this._device);
+
+  void sendInitCommands(BluetoothCharacteristic c) async{
+    //await c.write([0xBB, 0xB8, 0x01]); //start trip, see if needed
+    await c.write([0xBB, 0xDF, 0x50]); //start stream for sensor of id 0x50
+  }
 
   @override
   void initState() {
@@ -46,7 +53,25 @@ class _DepthMapGridState extends State<DepthMapGrid>{
           //SERVICES
           if(s.isNotEmpty){
             //SEND INIT COMMANDS TO START THE STREAM
-            //TODO
+            BluetoothService serviceControlGlasses;
+            BluetoothCharacteristic charactControl;
+            for(BluetoothService serviceControl in s){
+              if(serviceControl.uuid.toString() == _SERVICE_CONTROL_UUID){
+                serviceControlGlasses = serviceControl;
+                break;
+              }
+            }
+            if(serviceControlGlasses != null){
+              for(BluetoothCharacteristic charactCmd in serviceControlGlasses.characteristics){
+                if(charactCmd.uuid.toString() == _CHARACT_COMMAND_UUID){
+                  charactControl = charactCmd;
+                  break;
+                }
+              }
+            }
+            if(charactControl != null){
+              sendInitCommands(charactControl);
+            }
             //END : SEND INIT COMMANDS TO START THE STREAM
             //FIND THE SENSOR STREAMING CHARACTERISTIC
             BluetoothService serviceGlasses;
