@@ -22,7 +22,7 @@ uint8_t * depth_array = NULL;
 int indexDepth = 0;
 int numLine = -1;
 int numCol = -1;
-stateSSI currentState = SSI_SENDING_QUERY;
+char currentState = SSI_SENDING_QUERY;
 
 //Sending one line of the depth map that changed as ( 0x 11 SN LL XX XX XX XX ... 00 or XX) size = 20 bytes
 //with SN : Sequential number or index of the line, LL : Line length, XX : Depth data, 00 : Padding to make a 20 bytes long trame
@@ -41,7 +41,8 @@ void sendDepthArrayLine(int indexLine){
 }
 
 void validateQueryResponse(){ 
-  if((frameSSI[0] == 0xFE) && (frameSSI[1] == ~frameSSI[2]) && (frameSSI[1] == 0x0F) && (frameSSI[4] == 0x61) /*&& crc16*/){ 
+  uint8_t notLen = ~frameSSI[2];
+  if((frameSSI[0] == 0xFE) && (frameSSI[1] == notLen) && (frameSSI[1] == 0x0F) && (frameSSI[4] == 0x61) /*&& crc16*/){ 
     //TODO : rest of the frame maybe usefull
     currentState = SSI_SENDING_CONFIG;
     for(int i = 0; i < frameSSI[1]; ++i){ 
@@ -57,10 +58,11 @@ void validateQueryResponse(){
   }
 }
 
-void validateConfigResponse(){ 
-  if((frameSSI[0] == 0xFE) && (frameSSI[1] == ~frameSSI[2]) && (frameSSI[1] == 0x11) && (frameSSI[4] == 0x78) /*&& crc16*/){ 
-    numLine = (((((uint16_t)frameSSI[9])<<8) & 0xFF00) | (((uint16_t)frame[10]) & 0x00FF));
-    numCol = (((((uint16_t)frameSSI[13])<<8) & 0xFF00) | (((uint16_t)frame[14]) & 0x00FF));
+void validateConfigResponse(){
+  uint8_t notLen = ~frameSSI[2]; 
+  if((frameSSI[0] == 0xFE) && (frameSSI[1] == notLen) && (frameSSI[1] == 0x11) && (frameSSI[4] == 0x78) /*&& crc16*/){ 
+    numLine = (((((uint16_t)frameSSI[9])<<8) & 0xFF00) | (((uint16_t)frameSSI[10]) & 0x00FF));
+    numCol = (((((uint16_t)frameSSI[13])<<8) & 0xFF00) | (((uint16_t)frameSSI[14]) & 0x00FF));
     if(numLine > 0 && numCol > 0){ 
       if(depth_array != NULL){
         free(depth_array);  
@@ -86,7 +88,8 @@ void validateConfigResponse(){
 }
 
 void validateObserverResponse(){ 
-  if((frameSSI[0] == 0xFE) && (frameSSI[1] == ~frameSSI[2]) && (frameSSI[1] == 0x08) && (frameSSI[4] == 0x79) /*&& crc16*/){ 
+  uint8_t notLen = ~frameSSI[2];
+  if((frameSSI[0] == 0xFE) && (frameSSI[1] == notLen) && (frameSSI[1] == 0x08) && (frameSSI[4] == 0x79) /*&& crc16*/){ 
     currentState = SSI_PULLING;
     for(int i = 0; i < frameSSI[1]; ++i){ 
       frameSSI[i] = 0;
@@ -102,7 +105,8 @@ void validateObserverResponse(){
 }
 
 void parseManyData(){ 
-  if((frameSSI[0] == 0xFE) && (frameSSI[1] == ~frameSSI[2]) && (frameSSI[1] == 0x49) && (frameSSI[4] == 0x6D) /*&& crc16 && idSensor*/){ 
+  uint8_t notLen = ~frameSSI[2];
+  if((frameSSI[0] == 0xFE) && (frameSSI[1] == notLen) && (frameSSI[1] == 0x49) && (frameSSI[4] == 0x6D) /*&& crc16 && idSensor*/){ 
     if(depth_array != NULL){ 
       int lenMatrix = numLine*numCol;
       for(int i = 0; i < lenMatrix; ++i){ 
@@ -147,22 +151,27 @@ void setup() {
 
 void loop() {
   uint8_t recv;
+  uint8_t lenFrameQR = 7;
+  uint8_t toSendQR[7] = {0};
+  uint8_t lenFrameCF = 9;
+  uint8_t toSendCF[9] = {0};
+  uint8_t lenFrameOB = 18;
+  uint8_t toSendOB[18] = {0};
+  uint16_t crcFrame = 0;
   BLECentral central = blePeripheral.central();
   switch(currentState){ 
     case SSI_SENDING_QUERY :
       //0x FE 07 F8 '?' 'q' crc16 = 7 bytes
-      uint8_t lenFrame = 7;
-      uint8_t toSend[7] = {0};
-      toSend[0] = 0xFE;
-      toSend[1] = 0x07;
-      toSend[2] = 0xF8;
-      toSend[3] = 0x3F;
-      toSend[4] = 0x71;
-      uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
-      toSend[5] = (uint8_t)((crcFrame >> 8) & 0xFF);
-      toSend[6] = (uint8_t)(crcFrame & 0xFF);
-      for(int i = 0, i < lenFrame; ++i){ 
-        Serial1.write(toSend[i]);
+      toSendQR[0] = 0xFE;
+      toSendQR[1] = 0x07;
+      toSendQR[2] = 0xF8;
+      toSendQR[3] = 0x3F;
+      toSendQR[4] = 0x71;
+      crcFrame = ssi_fnCRC16(toSendQR, lenFrameQR);
+      toSendQR[5] = (uint8_t)((crcFrame >> 8) & 0xFF);
+      toSendQR[6] = (uint8_t)(crcFrame & 0xFF);
+      for(int i = 0; i < lenFrameQR; ++i){ 
+        Serial1.write(toSendQR[i]);
       }
       Serial.println("SENT QUERY");
       currentState = SSI_WAITING_QUERY_RSP;
@@ -179,20 +188,18 @@ void loop() {
       break;
     case SSI_SENDING_CONFIG :
       //0x FE 09 F6 00 'g' 0050 crc16 = 9 bytes
-      uint8_t lenFrame = 9;
-      uint8_t toSend[9] = {0};
-      toSend[0] = 0xFE;
-      toSend[1] = 0x09;
-      toSend[2] = 0xF6;
-      toSend[3] = 0x00;
-      toSend[4] = 0x67;
-      toSend[5] = 0x00;
-      toSend[6] = 0x50;
-      uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
-      toSend[7] = (uint8_t)((crcFrame >> 8) & 0xFF);
-      toSend[8] = (uint8_t)(crcFrame & 0xFF);
-      for(int i = 0, i < lenFrame; ++i){ 
-        Serial1.write(toSend[i]);
+      toSendCF[0] = 0xFE;
+      toSendCF[1] = 0x09;
+      toSendCF[2] = 0xF6;
+      toSendCF[3] = 0x00;
+      toSendCF[4] = 0x67;
+      toSendCF[5] = 0x00;
+      toSendCF[6] = 0x50;
+      crcFrame = ssi_fnCRC16(toSendCF, lenFrameCF);
+      toSendCF[7] = (uint8_t)((crcFrame >> 8) & 0xFF);
+      toSendCF[8] = (uint8_t)(crcFrame & 0xFF);
+      for(int i = 0; i < lenFrameCF; ++i){ 
+        Serial1.write(toSendCF[i]);
       }
       Serial.println("SENT GET CONFIG");
       currentState = SSI_WAITING_CONFIG_RSP;
@@ -209,29 +216,27 @@ void loop() {
       break;
     case SSI_SENDING_OBSERVER :
       //0x FE 12 ED 00 'o'/6F 0000 01 00 40 00000000 0050 crc16 = 18 bytes
-      uint8_t lenFrame = 18;
-      uint8_t toSend[18] = {0};
-      toSend[0] = 0xFE;
-      toSend[1] = 0x12;
-      toSend[2] = 0xED;
-      toSend[3] = 0x00;
-      toSend[4] = 0x6F;
-      toSend[5] = 0x00;
-      toSend[6] = 0x00;
-      toSend[7] = 0x01;
-      toSend[8] = 0x00;
-      toSend[9] = 0x40;
-      toSend[10] = 0x00;
-      toSend[11] = 0x00;
-      toSend[12] = 0x00;
-      toSend[13] = 0x00;
-      toSend[14] = 0x00;
-      toSend[15] = 0x50;
-      uint16_t crcFrame = ssi_fnCRC16(toSend, lenFrame);
-      toSend[16] = (uint8_t)((crcFrame >> 8) & 0xFF);
-      toSend[17] = (uint8_t)(crcFrame & 0xFF);
-      for(int i = 0, i < lenFrame; ++i){ 
-        Serial1.write(toSend[i]);
+      toSendOB[0] = 0xFE;
+      toSendOB[1] = 0x12;
+      toSendOB[2] = 0xED;
+      toSendOB[3] = 0x00;
+      toSendOB[4] = 0x6F;
+      toSendOB[5] = 0x00;
+      toSendOB[6] = 0x00;
+      toSendOB[7] = 0x01;
+      toSendOB[8] = 0x00;
+      toSendOB[9] = 0x40;
+      toSendOB[10] = 0x00;
+      toSendOB[11] = 0x00;
+      toSendOB[12] = 0x00;
+      toSendOB[13] = 0x00;
+      toSendOB[14] = 0x00;
+      toSendOB[15] = 0x50;
+      crcFrame = ssi_fnCRC16(toSendOB, lenFrameOB);
+      toSendOB[16] = (uint8_t)((crcFrame >> 8) & 0xFF);
+      toSendOB[17] = (uint8_t)(crcFrame & 0xFF);
+      for(int i = 0; i < lenFrameOB; ++i){ 
+        Serial1.write(toSendOB[i]);
       }
       Serial.println("SENT OBSERVER CREATE");
       currentState = SSI_WAITING_OBSERVER_RSP;
@@ -256,7 +261,7 @@ void loop() {
         parseManyData();
       }
       break;
-     default :
+    default :
       Serial.print("UNKOWN CMD ");Serial.println(currentState);
       break;
   }
