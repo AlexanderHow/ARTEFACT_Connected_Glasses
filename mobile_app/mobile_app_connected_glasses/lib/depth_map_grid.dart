@@ -18,6 +18,9 @@ class DepthMapGrid extends StatefulWidget{
 class _DepthMapGridState extends State<DepthMapGrid>{
   static const int _TRAME_ID_EVO64 = 0x11;
   static const int _TRAME_ID_VL53L1 = 0x50;
+  static const String _SERVICE_UUID = "838f7fdd-4c42-405f-b8d4-83a698cce2e";
+  static const String _CHARACT_SENSOR_STREAM_UUID = "a864bb58-1b21-4b89-8f5a-6947341abbf0";
+
   BluetoothDevice _device;
 
   DepthsFromSensor _depthsFromSensor = new DepthsFromSensor();
@@ -40,9 +43,31 @@ class _DepthMapGridState extends State<DepthMapGrid>{
           setState(() {
             _services = s;
           });
-          if(s.isNotEmpty && s[s.length-1].characteristics.isNotEmpty){
+          //SERVICES
+          if(s.isNotEmpty){
+            //SEND INIT COMMANDS TO START THE STREAM
+            //TODO
+            //END : SEND INIT COMMANDS TO START THE STREAM
+            //FIND THE SENSOR STREAMING CHARACTERISTIC
+            BluetoothService serviceGlasses;
+            BluetoothCharacteristic charactSensorStream;
+            for(BluetoothService service in s){
+              if(service.uuid.toString() == _SERVICE_UUID){
+                serviceGlasses = service;
+                break;
+              }
+            }
+            if(serviceGlasses != null){
+              for(BluetoothCharacteristic charact in serviceGlasses.characteristics){
+                if(charact.uuid.toString() == _CHARACT_SENSOR_STREAM_UUID){
+                  charactSensorStream = charact;
+                  break;
+                }
+              }
+            }
+            //END : FIND THE SENSOR STREAMING CHARACTERISTIC
             setState(() {
-              _characteristic = s[s.length-1].characteristics[0];
+              _characteristic = (charactSensorStream != null) ? charactSensorStream : s[s.length-1].characteristics[0]; //compatibility with previous test module (should do smthing else if the characteristic is null)
             });
             if(!_characteristic.isNotifying){
               _characteristic.setNotifyValue(true).then((notifyState){
@@ -50,7 +75,7 @@ class _DepthMapGridState extends State<DepthMapGrid>{
                   _notifyingCharacteristic = notifyState;
                 });
                 if(notifyState){
-                  //GESTION DE TRAME BLE ICI
+                  //SUBSCRIBE TO THE SENSOR STREAMING CHARACTERISTIC
                   _characteristic.value.listen((value) {
                     if (value.length > 0) {
                       int idTrame = value[0];
@@ -97,6 +122,7 @@ class _DepthMapGridState extends State<DepthMapGrid>{
                       }
                     }
                   });
+                  //END : SUBSCRIBE TO THE SENSOR STREAMING CHARACTERISTIC
                 }
               });
             }
