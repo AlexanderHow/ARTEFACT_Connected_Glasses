@@ -50,8 +50,9 @@ void parseSensor(){
 //PARSER SSI ///
 ////////////////
 void parseSSI(){ 
+  uint8_t notLen = ~frameSSI[SSI_FRAME_NOT_LEN_INDEX]);
   if(frameSSI[SSI_FRAME_SOF_INDEX] == 0xFE &&
-     frameSSI[SSI_FRAME_LEN_INDEX] == (~frameSSI[SSI_FRAME_NOT_LEN_INDEX]) /*&&
+     frameSSI[SSI_FRAME_LEN_INDEX] == notLen /*&&
      ssi_frame_check_crc(frameSSI, frameSSI[SSI_FRAME_LEN_INDEX]) == 0*/){ 
       uint8_t lenFrame = 0;
       uint8_t * toSend;
