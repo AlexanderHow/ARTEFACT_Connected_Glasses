@@ -32,7 +32,7 @@ uint16_t ssi_fnCRC16(const uint8_t *ptrFrame, uint16_t len);
 ///////////////////////////
 // Vérification du CRC   //
 ///////////////////////////
-static int ssi_frame_check_crc(const char *frame, uint16_t len);
+int ssi_frame_check_crc(const char *frame, uint16_t len);
 
 
 ///////////////////

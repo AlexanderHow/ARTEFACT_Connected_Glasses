@@ -40,7 +40,7 @@ uint16_t ssi_fnCRC16(const uint8_t *ptrFrame, uint16_t len)
 ///////////////////////////
 // Vérification du CRC   //
 ///////////////////////////
-static int ssi_frame_check_crc(const char *frame, uint16_t len)
+int ssi_frame_check_crc(const char *frame, uint16_t len)
 {
     uint8_t payload_size = 0;
     uint8_t cmd = 0; 
@@ -134,7 +134,7 @@ void SSI_discoverReply(uint8_t ** toSend, uint8_t lenFrame){
 	if(*toSend == NULL){ 
 		return;
 	}
-    int sensorId = 0x0050;
+    uint16_t sensorId = 0x0050;
     uint8_t type = 0x01;
     uint8_t scaler = 0x00;
     uint8_t mini[4] = {0x00, 0x00, 0x00, 0x00};
@@ -178,7 +178,7 @@ void SSI_configurationRsp(uint8_t ** toSend, uint8_t lenFrame){
 	if(*toSend == NULL){ 
 		return;
 	}
-    int sensorId = 0x0050;
+    uint16_t sensorId = 0x0050;
     
     (*toSend)[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
     (*toSend)[SSI_FRAME_LEN_INDEX] = lenFrame;
@@ -235,7 +235,7 @@ void SSI_manyData(uint8_t ** toSend, uint8_t lenFrame, uint8_t * depths, int len
 	if(*toSend == NULL){ 
 		return;
 	}
-    int sensorId = 0x0050;
+    uint16_t sensorId = 0x0050;
     
     (*toSend)[SSI_FRAME_SOF_INDEX] = SSI_FRAME_SOF;
     (*toSend)[SSI_FRAME_LEN_INDEX] = lenFrame;
