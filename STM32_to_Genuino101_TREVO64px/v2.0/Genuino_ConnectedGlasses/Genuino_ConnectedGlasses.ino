@@ -36,7 +36,6 @@ void sendDepthArrayLine(int indexLine){
       toSend[k+3] = (char)depth_array[8*indexLine+k];  
     }
     trame.setValue(toSend, 20);
-    delay(10);
   }
 }
 
@@ -150,6 +149,8 @@ void setup() {
 }
 
 void loop() {
+  BLECentral central = blePeripheral.central();
+  
   uint8_t recv;
   uint8_t lenFrameQR = 7;
   uint8_t toSendQR[7] = {0};
@@ -158,7 +159,7 @@ void loop() {
   uint8_t lenFrameOB = 18;
   uint8_t toSendOB[18] = {0};
   uint16_t crcFrame = 0;
-  BLECentral central = blePeripheral.central();
+  
   switch(currentState){ 
     case SSI_SENDING_QUERY :
       //0x FE 07 F8 '?' 'q' crc16 = 7 bytes
@@ -258,7 +259,14 @@ void loop() {
         indexFrameSSI++;
       }
       if(indexFrameSSI >= 73){ 
-        parseManyData();
+        if(central && central.connected()){ 
+          parseManyData();
+        }else{ 
+          for(int i = 0; i < frameSSI[1]; ++i){ 
+            frameSSI[i] = 0;
+          }
+          indexFrameSSI = 0;
+        }
       }
       break;
     default :
