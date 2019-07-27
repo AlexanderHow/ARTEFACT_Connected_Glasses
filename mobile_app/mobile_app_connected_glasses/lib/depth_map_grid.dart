@@ -18,11 +18,10 @@ class DepthMapGrid extends StatefulWidget{
 class _DepthMapGridState extends State<DepthMapGrid>{
   static const int _TRAME_ID_EVO64 = 0x11;
   static const int _TRAME_ID_VL53L1 = 0x50;
-  static const String _SERVICE_UUID = "838f7fdd-4c42-405f-b8d4-83a698cce2e";
+  static const String _SERVICE_UUID = "838f7fdd-4c42-405f-b8d4-83a698cce2e0";
   static const String _CHARACT_SENSOR_STREAM_UUID = "a864bb58-1b21-4b89-8f5a-6947341abbf0";
   static const String _SERVICE_CONTROL_UUID = "00ff0000-fd7a-4c87-6373-712060e11c1e";
   static const String _CHARACT_COMMAND_UUID = "00ff0001-fd7a-4c87-6373-712060e11c1e";
-
   BluetoothDevice _device;
 
   DepthsFromSensor _depthsFromSensor = new DepthsFromSensor();
@@ -92,9 +91,15 @@ class _DepthMapGridState extends State<DepthMapGrid>{
             }
             //END : FIND THE SENSOR STREAMING CHARACTERISTIC
             setState(() {
-              _characteristic = (charactSensorStream != null) ? charactSensorStream : s[s.length-1].characteristics[0]; //compatibility with previous test module (should do smthing else if the characteristic is null)
+              if(charactSensorStream != null){
+                _characteristic = charactSensorStream;
+              }else{
+                if(s[s.length-1].characteristics.isNotEmpty){
+                  _characteristic = s[s.length-1].characteristics[0]; //compatibility with previous test module (should do smthing else if the characteristic is null)
+                }
+              }
             });
-            if(!_characteristic.isNotifying){
+            if(_characteristic != null && !_characteristic.isNotifying){
               _characteristic.setNotifyValue(true).then((notifyState){
                 setState(() {
                   _notifyingCharacteristic = notifyState;
