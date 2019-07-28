@@ -1,10 +1,9 @@
+#include <CurieBLE.h>
 #include <SSIManager.h>
 
-#include <CurieBLE.h>
-
 BLEPeripheral blePeripheral;  // BLE Peripheral Device
-BLEService glassesService("b60ba360-5c16-4ddb-bdb2-d134fa42bfbc");
-BLECharacteristic trame("b60ba360-5c16-4ddb-bdb2-d134fa42bfbc", BLERead | BLENotify, 20);
+BLEService glassesService("838f7fdd-4c42-405f-b8d4-83a698cce2e0");
+BLECharacteristic trame("a864bb58-1b21-4b89-8f5a-6947341abbf0", BLERead | BLENotify, 20);
 
 enum stateSSI{ 
   SSI_SENDING_QUERY = 'q',
@@ -18,24 +17,31 @@ enum stateSSI{
 
 uint8_t frameSSI[SSI_FRAME_MAX_LENGTH] = {0}; //0xFE Len ~Len Addr Cmd Data Crc
 int indexFrameSSI = 0;
-uint8_t * depth_array = NULL;
+uint8_t * depth_array;
 int indexDepth = 0;
 int numLine = -1;
 int numCol = -1;
+int frameToSkip = 0;
 char currentState = SSI_SENDING_QUERY;
 
-//Sending one line of the depth map that changed as ( 0x 11 SN LL XX XX XX XX ... 00 or XX) size = 20 bytes
-//with SN : Sequential number or index of the line, LL : Line length, XX : Depth data, 00 : Padding to make a 20 bytes long trame
 void sendDepthArrayLine(int indexLine){
-  if(indexLine < numLine && numCol < 17){
+  //Sending one line of the depth map that changed as ( 0x 11 SN LL XX XX XX XX ... 00 or XX) size = 20 bytes
+  //with SN : Sequential number or index of the line, LL : Line length, XX : Depth data, 00 : Padding to make a 20 bytes long trame
+  if(numLine > 0 && numCol > 0 && indexLine < numLine && numCol < 17){
     unsigned char toSend[20] = {0};
     toSend[0] = 17; //0x11
+    Serial.print(17);Serial.print(" ");
     toSend[1] = (char)indexLine;    
+    Serial.print(indexLine);Serial.print(" ");
     toSend[2] = numCol;
+    Serial.print(numCol);Serial.print(" ");
     for(int k = 0; k < numCol; ++k){
-      toSend[k+3] = (char)depth_array[8*indexLine+k];  
+      toSend[k+3] = (char)depth_array[8*indexLine+k];
+      Serial.print(depth_array[8*indexLine+k]);Serial.print(" ");  
     }
     trame.setValue(toSend, 20);
+    Serial.println();
+    delay(500);
   }
 }
 
@@ -73,7 +79,7 @@ void validateConfigResponse(){
         frameSSI[i] = 0;
       }
       indexFrameSSI = 0;
-      Serial.println("CONFIG RESPONSE VALIDATED");
+      Serial.print("CONFIG RESPONSE VALIDATED ");Serial.print(numLine);Serial.print(" ");Serial.println(numCol);
     }else{ 
       Serial.print("ERROR ALLOC ");
       Serial.print(numLine);Serial.print(" ");Serial.println(numCol);
@@ -111,15 +117,7 @@ void parseManyData(){
       for(int i = 0; i < lenMatrix; ++i){ 
         depth_array[i] = frameSSI[i+7];
       }
-      for(int j = 0; j < numLine; ++j){ 
-        sendDepthArrayLine(j);
-      }
-      
-      for(int i = 0; i < frameSSI[1]; ++i){ 
-        frameSSI[i] = 0;
-      }
-      indexFrameSSI = 0;
-      Serial.println("MANY DATA READ AND SENT");
+      Serial.println("MANY DATA PARSED");
     }
   }else{ 
     Serial.print("ERROR MANY DATA ");
@@ -144,7 +142,7 @@ void setup() {
 
   //Serial(0,1) communication with module with the sensor, each message begin with 0x00 and continue by sending all the pixels of the depth map
   Serial1.begin(115200);
-  delay(80);
+  delay(4000);
   while(!Serial1){;}
 }
 
@@ -159,7 +157,7 @@ void loop() {
   uint8_t lenFrameOB = 18;
   uint8_t toSendOB[18] = {0};
   uint16_t crcFrame = 0;
-  
+
   switch(currentState){ 
     case SSI_SENDING_QUERY :
       //0x FE 07 F8 '?' 'q' crc16 = 7 bytes
@@ -178,6 +176,7 @@ void loop() {
       currentState = SSI_WAITING_QUERY_RSP;
       break;
     case SSI_WAITING_QUERY_RSP :
+      
       if(Serial1.available() > 0){ 
         recv = (uint8_t)Serial1.read();
         frameSSI[indexFrameSSI] = recv;
@@ -252,22 +251,45 @@ void loop() {
         validateObserverResponse();
       }
       break;
-    case SSI_PULLING :
+    case SSI_PULLING : //print here
       if(Serial1.available() > 0){ 
         recv = (uint8_t)Serial1.read();
         frameSSI[indexFrameSSI] = recv;
         indexFrameSSI++;
-      }
-      if(indexFrameSSI >= 73){ 
-        if(central && central.connected()){ 
-          parseManyData();
-        }else{ 
-          for(int i = 0; i < frameSSI[1]; ++i){ 
-            frameSSI[i] = 0;
+
+        //Synchronisation
+        if(indexFrameSSI == 3){ 
+          if(!(frameSSI[0]==0xFE && frameSSI[1]==0x49 && frameSSI[2]==0xB6)){ 
+            if(frameSSI[1]==0xFE && frameSSI[2]==0x49){ 
+              frameSSI[0]=0xFE;
+              frameSSI[1]=0x49;
+              indexFrameSSI = 2;
+            }else if(frameSSI[2]==0xFE){ 
+              frameSSI[0]=0xFE;
+              indexFrameSSI = 1;
+            }else{ 
+              indexFrameSSI = 0;
+            }
           }
-          indexFrameSSI = 0;
         }
       }
+      
+      if(indexFrameSSI >= 73){
+        parseManyData();
+        indexFrameSSI = 0;
+        
+        if(central && central.connected() && trame.subscribed() && trame.canNotify()){
+          if(frameToSkip == 0){
+            for(int j = 0; j < numLine; ++j){ 
+              sendDepthArrayLine(j);
+            }
+          }
+          frameToSkip++;
+          frameToSkip = frameToSkip % FRAMETOSKIP;
+        }
+      }
+
+      
       break;
     default :
       Serial.print("UNKOWN CMD ");Serial.println(currentState);

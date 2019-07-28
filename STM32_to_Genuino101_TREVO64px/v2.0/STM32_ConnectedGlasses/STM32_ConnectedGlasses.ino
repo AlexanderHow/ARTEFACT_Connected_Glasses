@@ -7,6 +7,8 @@ uint8_t depthMatrix[64] = {0};
 uint8_t frameSensor[137] = {0}; //1 byte header + 64*2 bytes of data + 8 bytes of CRC32
 int indexFrameSensor = 0;
 int totalLenFrame = 0; // len - 137 = X byte of padding
+bool paddingEnded = false;
+uint8_t * toSendMD;
 
 uint8_t frameSSI[SSI_FRAME_MAX_LENGTH] = {0}; //0xFE Len ~Len Addr Cmd Data Crc
 int indexFrameSSI = 0;
@@ -38,19 +40,20 @@ void parseSensor(){
       distance = map(distance, 0, 5000, 0, 255);
       depthMatrix[i-1] = distance;
     }
-    //crc32 only on the 4 lower bits of each
+    //crc32 only on the 4 lower bits of each (warning : frameSensor doesn't contain the padding (0x80 x (lenFrame - 137))
     /*for(int j = 129 ; j < 137; ++j){
       uint8_t crc = frame[j] (& 0x0F);
     }*/
+    //Serial.println("SENSOR FRAME PARSED SUCCESFULLY");
     hasDepthsToSend = true;
-   }  
+  }  
 }
 
 ////////////////
 //PARSER SSI ///
 ////////////////
 void parseSSI(){ 
-  uint8_t notLen = ~frameSSI[SSI_FRAME_NOT_LEN_INDEX]);
+  uint8_t notLen = ~frameSSI[SSI_FRAME_NOT_LEN_INDEX];
   if(frameSSI[SSI_FRAME_SOF_INDEX] == 0xFE &&
      frameSSI[SSI_FRAME_LEN_INDEX] == notLen /*&&
      ssi_frame_check_crc(frameSSI, frameSSI[SSI_FRAME_LEN_INDEX]) == 0*/){ 
@@ -99,6 +102,9 @@ void setup() {
   Serial1.write("\x00\x11\x02\x4C"); //distance mode
   delay(50);
 
+  Serial.begin(115200);
+  delay(50);
+
   //Serial communication with main board
   //Set the baud rate of your needs
   Serial4.begin(115200);
@@ -131,44 +137,62 @@ void loop() {
     }
   }
 
-  //read sensor output
   uint8_t recvSensor;
-  while(Serial1.available() > 0){ 
-    recvSensor = Serial1.read();
-    if(recvSensor == 0x17 && indexFrameSensor < 129){ 
-      indexFrameSensor = 0;
-      totalLenFrame = 0;
-      frameSensor[indexFrameSensor] = recvSensor;
-      indexFrameSensor++;
-      totalLenFrame++;
-    }else{ 
-      
-      if(indexFrameSensor >= 129 && recvSensor == 0x80){ 
-        //skip padding
-        totalLenFrame++;
-      }else{ 
+  //READING DATA FROM SENSOR 
+  while(Serial1.available()>0){
+    recvSensor = (uint8_t)Serial1.read();
+    if(indexFrameSensor == 0){ //HEADER
+      if(recvSensor == 0x11){
+        //Serial.println("START SENSOR FRAME");
         frameSensor[indexFrameSensor] = recvSensor;
         indexFrameSensor++;
         totalLenFrame++;
       }
-
-      if(indexFrameSensor >= 137){ 
-        parseSensor();
-        break;
+    }
+    else if(indexFrameSensor > 0 && indexFrameSensor < 129){ //DISTANCE DATA
+      frameSensor[indexFrameSensor] = recvSensor;
+      indexFrameSensor++;
+      totalLenFrame++;
+    }
+    else{ //PADDING AND CRC32
+      if(paddingEnded == true){
+        if(indexFrameSensor < 137){
+          frameSensor[indexFrameSensor] = recvSensor;
+          indexFrameSensor++;
+          totalLenFrame++;
+        }else{
+          //Serial.println("END SENSOR FRAME");
+          break;
+        }
+      }else{
+        if(recvSensor != 128){ //0x80 = padding
+          frameSensor[indexFrameSensor] = recvSensor;
+          indexFrameSensor++;
+          totalLenFrame++;
+          paddingEnded = true;
+        }else{ 
+          totalLenFrame++;
+        }
       }
     }
   }
 
+  if(indexFrameSensor >= 137){
+    parseSensor();
+    indexFrameSensor = 0;
+    totalLenFrame = 0;
+  }
+
   //send ssi cmd 'm'
-  if(observerCreated == true && hasDepthsToSend == true){
-    uint8_t * toSend;
-    SSI_manyData(&toSend, 73, depthMatrix, 64);
-    if(toSend != NULL){ 
+  if(observerCreated == true && hasDepthsToSend == true){ //print here
+    SSI_manyData(&toSendMD, 73, depthMatrix, 64);
+    if(toSendMD != NULL){ 
+      Serial.println("SENDING SENSOR FRAME");
       for(int i = 0; i < 73; ++i){ 
-        Serial4.write(toSend[i]);
+        Serial4.write(toSendMD[i]);
+        delay(2); //to match Genuino101 performances
       }
     }
-    if(toSend != NULL){free(toSend);}
     hasDepthsToSend = false;
   }
 }
