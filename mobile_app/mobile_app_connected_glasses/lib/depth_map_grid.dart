@@ -18,10 +18,10 @@ class DepthMapGrid extends StatefulWidget{
 class _DepthMapGridState extends State<DepthMapGrid>{
   static const int _TRAME_ID_EVO64 = 0x11;
   static const int _TRAME_ID_VL53L1 = 0x50;
-  static const String _SERVICE_UUID = "838f7fdd-4c42-405f-b8d4-83a698cce2e0";
-  static const String _CHARACT_SENSOR_STREAM_UUID = "a864bb58-1b21-4b89-8f5a-6947341abbf0";
-  static const String _SERVICE_CONTROL_UUID = "00ff0000-fd7a-4c87-6373-712060e11c1e";
-  static const String _CHARACT_COMMAND_UUID = "00ff0001-fd7a-4c87-6373-712060e11c1e";
+  static Guid _SERVICE_UUID = new Guid("838f7fdd-4c42-405f-b8d4-83a698cce2e0");
+  static Guid _CHARACT_SENSOR_STREAM_UUID = new Guid("a864bb58-1b21-4b89-8f5a-6947341abbf0");
+  static Guid _SERVICE_CONTROL_UUID = new Guid("00ff0000-fd7a-4c87-6373-712060e11c1e");
+  static Guid _CHARACT_COMMAND_UUID = new Guid("00ff0001-fd7a-4c87-6373-712060e11c1e");
   BluetoothDevice _device;
 
   DepthsFromSensor _depthsFromSensor = new DepthsFromSensor();
@@ -33,11 +33,6 @@ class _DepthMapGridState extends State<DepthMapGrid>{
 
   _DepthMapGridState(this._device);
 
-  void sendInitCommands(BluetoothCharacteristic c) async{
-    //await c.write([0xBB, 0xB8, 0x01]); //start trip, see if needed
-    await c.write([0xBB, 0xDF, 0x50]); //start stream for sensor of id 0x50
-  }
-
   @override
   void initState() {
     _deviceStateSubscription = _device.state.listen((s) {
@@ -45,7 +40,7 @@ class _DepthMapGridState extends State<DepthMapGrid>{
         _deviceState = s;
       });
       if (s == BluetoothDeviceState.connected) {
-        _device.discoverServices().then((s) {
+        _device.discoverServices().then((s) async{
           setState(() {
             _services = s;
           });
@@ -55,35 +50,36 @@ class _DepthMapGridState extends State<DepthMapGrid>{
             BluetoothService serviceControlGlasses;
             BluetoothCharacteristic charactControl;
             for(BluetoothService serviceControl in s){
-              if(serviceControl.uuid.toString() == _SERVICE_CONTROL_UUID){
+              if(serviceControl.uuid.toString() == _SERVICE_CONTROL_UUID.toString()){
                 serviceControlGlasses = serviceControl;
                 break;
               }
             }
             if(serviceControlGlasses != null){
               for(BluetoothCharacteristic charactCmd in serviceControlGlasses.characteristics){
-                if(charactCmd.uuid.toString() == _CHARACT_COMMAND_UUID){
+                if(charactCmd.uuid.toString() == _CHARACT_COMMAND_UUID.toString()){
                   charactControl = charactCmd;
                   break;
                 }
               }
             }
             if(charactControl != null){
-              sendInitCommands(charactControl);
+              await charactControl.write([0xBB, 0xDF, 0x50]);
             }
             //END : SEND INIT COMMANDS TO START THE STREAM
             //FIND THE SENSOR STREAMING CHARACTERISTIC
             BluetoothService serviceGlasses;
             BluetoothCharacteristic charactSensorStream;
             for(BluetoothService service in s){
-              if(service.uuid.toString() == _SERVICE_UUID){
+              print(service.uuid.toString());
+              if(service.uuid.toString() == _SERVICE_UUID.toString()){
                 serviceGlasses = service;
                 break;
               }
             }
             if(serviceGlasses != null){
               for(BluetoothCharacteristic charact in serviceGlasses.characteristics){
-                if(charact.uuid.toString() == _CHARACT_SENSOR_STREAM_UUID){
+                if(charact.uuid.toString() == _CHARACT_SENSOR_STREAM_UUID.toString()){
                   charactSensorStream = charact;
                   break;
                 }
