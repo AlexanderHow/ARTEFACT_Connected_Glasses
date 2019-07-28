@@ -1,9 +1,4 @@
-#include <CurieBLE.h>
 #include <SSIManager.h>
-
-BLEPeripheral blePeripheral;  // BLE Peripheral Device
-BLEService glassesService("838f7fdd-4c42-405f-b8d4-83a698cce2e0");
-BLECharacteristic trame("a864bb58-1b21-4b89-8f5a-6947341abbf0", BLERead | BLENotify, 20);
 
 enum stateSSI{ 
   SSI_SENDING_QUERY = 'q',
@@ -23,27 +18,6 @@ int numLine = -1;
 int numCol = -1;
 int frameToSkip = 0;
 char currentState = SSI_SENDING_QUERY;
-
-void sendDepthArrayLine(int indexLine){
-  //Sending one line of the depth map that changed as ( 0x 11 SN LL XX XX XX XX ... 00 or XX) size = 20 bytes
-  //with SN : Sequential number or index of the line, LL : Line length, XX : Depth data, 00 : Padding to make a 20 bytes long trame
-  if(numLine > 0 && numCol > 0 && indexLine < numLine && numCol < 17){
-    unsigned char toSend[20] = {0};
-    toSend[0] = 17; //0x11
-    Serial.print(17);Serial.print(" ");
-    toSend[1] = (char)indexLine;    
-    Serial.print(indexLine);Serial.print(" ");
-    toSend[2] = numCol;
-    Serial.print(numCol);Serial.print(" ");
-    for(int k = 0; k < numCol; ++k){
-      toSend[k+3] = (char)depth_array[8*indexLine+k];
-      Serial.print(depth_array[8*indexLine+k]);Serial.print(" ");  
-    }
-    trame.setValue(toSend, 20);
-    Serial.println();
-    delay(500);
-  }
-}
 
 void validateQueryResponse(){ 
   uint8_t notLen = ~frameSSI[2];
@@ -110,6 +84,10 @@ void validateObserverResponse(){
 }
 
 void parseManyData(){ 
+  for(int d = 0; d < 73; ++d){ 
+    Serial.print(frameSSI[d],HEX); Serial.print(" ");
+  }
+  Serial.println();
   uint8_t notLen = ~frameSSI[2];
   if((frameSSI[0] == 0xFE) && (frameSSI[1] == notLen) && (frameSSI[1] == 0x49) && (frameSSI[4] == 0x6D) /*&& crc16 && idSensor*/){ 
     if(depth_array != NULL){ 
@@ -128,15 +106,6 @@ void parseManyData(){
 }
 
 void setup() {
-  //BLE set up
-  blePeripheral.setLocalName("ARTEFACT");
-  blePeripheral.setAdvertisedServiceUuid(glassesService.uuid());
-  blePeripheral.addAttribute(glassesService);
-  blePeripheral.addAttribute(trame);
-  blePeripheral.begin(); 
-  delay(80);
-
-  //DEBUG
   Serial.begin(115200);
   delay(80);
 
@@ -147,8 +116,6 @@ void setup() {
 }
 
 void loop() {
-  BLECentral central = blePeripheral.central();
-  
   uint8_t recv;
   uint8_t lenFrameQR = 7;
   uint8_t toSendQR[7] = {0};
@@ -277,16 +244,6 @@ void loop() {
       if(indexFrameSSI >= 73){
         parseManyData();
         indexFrameSSI = 0;
-        
-        if(central && central.connected() && trame.subscribed() && trame.canNotify()){
-          if(frameToSkip == 0){
-            for(int j = 0; j < numLine; ++j){ 
-              sendDepthArrayLine(j);
-            }
-          }
-          frameToSkip++;
-          frameToSkip = frameToSkip % FRAMETOSKIP;
-        }
       }
 
       

@@ -187,10 +187,9 @@ void loop() {
   if(observerCreated == true && hasDepthsToSend == true){ //print here
     SSI_manyData(&toSendMD, 73, depthMatrix, 64);
     if(toSendMD != NULL){ 
-      Serial.println("SENDING SENSOR FRAME");
+      //Serial.println("SENDING SENSOR FRAME");
       for(int i = 0; i < 73; ++i){ 
         Serial4.write(toSendMD[i]);
-        delay(2); //to match Genuino101 performances
       }
     }
     hasDepthsToSend = false;
