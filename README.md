@@ -14,6 +14,7 @@ Contient le code à flasher sur une carte Genuino101. Il met en oeuvre la récup
 Contient le code à flasher sur une carte Genuino101. Il met en oeuvre l'utilisation du BLE selon les spécifications utilisées par l'entreprise Ellcie Healthy (un service de contrôle avec une caractéristique pour démarrer le streaming de données + un service et sa caractéristique pour diffuser le flux de données).<br /> Il sert à valider le bon fonctionnement de l'application mobile en accord ces spécifications BLE et à illustrer un template de code diffusant selon ces spécifications une trame contenant des informations de profondeur d'un capteur ToF (générées aléatoirement puis formattées pour ce test/use case).<br /> Les communications BLE avec l'application mobile en accord avec les spécifications définies ont été validés.
 
 * **/mobile_app** :<br />
+Lien de l'apk : https://drive.google.com/file/d/1QmQy0hHajpWWd1VRaISSyDoH866QAN0A/view?usp=sharing <br />
 Contient le projet Flutter pour l'application mobile cross-plateforme IoS et Android. Ses fonctionnalités sont :<br /> 
   - Recherche des appareils bluetooth à proximité
   - Connexion à un appareil bluetooth
