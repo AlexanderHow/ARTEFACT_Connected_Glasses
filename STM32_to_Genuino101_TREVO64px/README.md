@@ -25,7 +25,7 @@ Des commandes permettent de configurer le mode de fonctionnement du capteur :
 - Fast Mode :<br /> If performance is driven by the readings peed, the sensor can be set to workin this mode. = 0x00 21 02 B5
 Malheureusment aucune commande ne permet de réajuster le baud rate du socle utilisé
 
-Après récupération des 64 distances (entre 0 et 5000 mm), elles sont ramenées à des valeurs entre 1 et 254 (pour correspondre à une information sur 1 Byte)
+Après récupération des 64 distances (entre 0 et 5000 mm), elles sont ramenées à des valeurs entre 0 et 255 (pour correspondre à une information sur 1 Byte)
 
 ## Concernant la v1.0 : <br />
 Le module de la Nucleo-64 commence par envoyer la trame suivante : { 255 nombre_de_lignes_de_la_matrice_de_profondeur nombre_de_colonnes_de_la_matrice_de_profondeur }<br />
@@ -44,7 +44,7 @@ Certains soucis de performances vis à vis de la Genuino 101 sont à noter
 ## Concernant la v2.0 : <br />
 Les communications entre les deux cartes se fait en suivant le protocole SSI suivant (http://www.janding.fi/iiro/papers/SSI%20protocol%20specification_12.pdf) <br />
 Du logs sur le port série USB de la Genuino101 remplace le BLE pour expliciter davantage les échanges SSI, un delay de 4 secondes au démarrage de cette dernière vous permet d'avoir le temps d'ouvrir le moniteur série associé.
-Le dossier contenant le programme pour la carte Nucleo-64 (processeur STM32) inclut une blibliothèque custom qui regroupe des fonctionnalités communes au niveau du traitement des trames SSI et de leur formattage.
+La v2.0 inclue une blibliothèque custom qui regroupe des fonctionnalités communes au niveau du traitement des trames SSI et de leur formattage.
 
 ## Concernant la lib_SSIMananger : <br />
 lib_SSIManager is a lib to manage the ssi commands, <br />
