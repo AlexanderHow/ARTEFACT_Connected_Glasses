@@ -36,8 +36,8 @@ Est la bibliothèque créée et utilisée pour gérer les communications SSI et 
 <br />
 
 ## Softwares et Langages utilisés :
-* Développement mobile : Android Studio avec les plugins Flutter et Dart
-* Développement embarqué : Arduino IDE avec les bibliothèques adaptées aux boards cibles et en C
+* Développement mobile : Android Studio avec les plugins Flutter et Dart.
+* Développement embarqué : Arduino IDE avec les bibliothèques adaptées aux boards cibles et en C.
 
 
 *Plus de détails sont fournis dans les différentes sous parties du projet quant aux références et guide d'utilisation/installation
