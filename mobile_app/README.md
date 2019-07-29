@@ -1,15 +1,15 @@
 # mobile_app_connected_glasses
 
-Le code de l'application se trouve en .\mobile_app_connected_glasses\lib<br \>
-Cette application est développée en Dart sous Flutter et utilise des fonctionnalités bluetooth<br \>
+Le code de l'application se trouve en .\mobile_app_connected_glasses\lib<br />
+Cette application est développée en Dart sous Flutter et utilise des fonctionnalités bluetooth<br />
 
-## Utilisation :<br \>
-Lancez l'application<br \>
-Activez le bluetooth et la localisation si cela n'est pas déjà fait<br \>
-Appuyez sur la loupe en bas à droite pour lancer la recherche des appareils bluetooth à proximité<br \>
-Sélectionnez celui réprésentant vos lunettes bluetooth en cliquand sur connect<br \>
-Attendez que la connexion s'établisse (sur l'écran d'attente)<br \>
-Observez la carte des profondeur<br \>
+## Utilisation :<br />
+Lancez l'application<br />
+Activez le bluetooth et la localisation si cela n'est pas déjà fait<br />
+Appuyez sur la loupe en bas à droite pour lancer la recherche des appareils bluetooth à proximité<br />
+Sélectionnez celui réprésentant vos lunettes bluetooth en cliquand sur connect<br />
+Attendez que la connexion s'établisse (sur l'écran d'attente)<br />
+Observez la carte des profondeur<br />
 Cliquez sur les pixel rouge ou orange pour déclencher les vibrations<br />
 
 ## Modèle :<br />
