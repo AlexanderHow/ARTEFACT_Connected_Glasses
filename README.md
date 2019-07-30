@@ -42,3 +42,6 @@ Est la bibliothèque créée et utilisée pour gérer les communications SSI et 
 
 
 *Plus de détails sont fournis dans les différentes sous parties du projet quant aux références et guide d'utilisation/installation
+
+
+## IMPORTANT PARTS FOR ELLCIE HEALTHY ARE : /STM32_to_Genuino101_TREVO64px/v2.0/STM32_ConnectedGlasses (module à attacher aux lunettes), /STM32_to_Genuino101_TREVO64px/v2.0/lib_SSIManager (la lib pour le SSI) and /mobile_app (l'application mobile)
